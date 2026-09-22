@@ -206,11 +206,29 @@ class OverlayTickerService : Service() {
         val thaiText = thai?.firstPrize ?: "------"
 
         val dateFmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
-        val today = dateFmt.format(NetworkTime.now().time)
+        val nowCal = NetworkTime.now()
+        val today = dateFmt.format(nowCal.time)
         val slot0930 = HistoryStore.getSlot(applicationContext, today, HistoryStore.SLOT_0930)
         val slot1400 = HistoryStore.getSlot(applicationContext, today, HistoryStore.SLOT_1400)
         val slot0930Text = slot0930?.let { calculate2D(it.set, it.value) } ?: "--"
         val slot1400Text = slot1400?.let { calculate2D(it.set, it.value) } ?: "--"
+
+        val nowSeconds = MarketSchedule.secondsSinceMidnight(
+            nowCal.get(java.util.Calendar.HOUR_OF_DAY),
+            nowCal.get(java.util.Calendar.MINUTE),
+            nowCal.get(java.util.Calendar.SECOND)
+        )
+
+        // App ရဲ့ Top Ticker Bar အတိုင်းပဲ - break period မှာ SET/Value/2D
+        // live ဂဏန်းတွေ ရပ်ပြီး "Market Break" ပြပါမည်
+        if (!MarketSchedule.isMarketLiveNow(nowSeconds)) {
+            val sb = SpannableStringBuilder()
+            sb.append("9:30AM ").append(slot0930Text)
+            sb.append("   |   2PM ").append(slot1400Text)
+            sb.append("   |   Market Break \u2022 Reopens ").append(MarketSchedule.reopenLabel(nowSeconds))
+            sb.append("   |   Thai ").append(thaiText)
+            return sb
+        }
 
         val sb = SpannableStringBuilder()
         when (val result = SettradeRepository.fetchLiveSetIndex()) {

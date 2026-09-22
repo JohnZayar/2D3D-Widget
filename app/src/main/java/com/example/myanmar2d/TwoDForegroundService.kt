@@ -55,13 +55,23 @@ class TwoDForegroundService : Service() {
     private fun startUpdating() {
         scope.launch {
             while (true) {
-                when (val result = SettradeRepository.fetchLiveSetIndex()) {
-                    is SettradeRepository.FetchResult.Success -> {
-                        lastKnownTwoD = result.data.twoD
-                        updateNotification(lastKnownTwoD, isLive = true)
-                    }
-                    is SettradeRepository.FetchResult.Failure -> {
-                        updateNotification(lastKnownTwoD, isLive = false)
+                val nowCal = NetworkTime.now()
+                val nowSeconds = MarketSchedule.secondsSinceMidnight(
+                    nowCal.get(java.util.Calendar.HOUR_OF_DAY),
+                    nowCal.get(java.util.Calendar.MINUTE),
+                    nowCal.get(java.util.Calendar.SECOND)
+                )
+                if (!MarketSchedule.isMarketLiveNow(nowSeconds)) {
+                    updateBreakNotification(MarketSchedule.reopenLabel(nowSeconds))
+                } else {
+                    when (val result = SettradeRepository.fetchLiveSetIndex()) {
+                        is SettradeRepository.FetchResult.Success -> {
+                            lastKnownTwoD = result.data.twoD
+                            updateNotification(lastKnownTwoD, isLive = true)
+                        }
+                        is SettradeRepository.FetchResult.Failure -> {
+                            updateNotification(lastKnownTwoD, isLive = false)
+                        }
                     }
                 }
                 delay(POLL_INTERVAL_MS)
@@ -69,9 +79,39 @@ class TwoDForegroundService : Service() {
         }
     }
 
+    private fun updateBreakNotification(reopenLabel: String) {
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        manager.notify(NOTIFICATION_ID, buildBreakNotification(reopenLabel))
+    }
+
     private fun updateNotification(value: String, isLive: Boolean) {
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.notify(NOTIFICATION_ID, buildNotification(value, isLive))
+    }
+
+    private fun buildBreakNotification(reopenLabel: String): Notification {
+        val openAppIntent = packageManager.getLaunchIntentForPackage(packageName)
+        val contentPendingIntent = PendingIntent.getActivity(
+            this, 0, openAppIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val stopIntent = Intent(this, TwoDForegroundService::class.java).apply {
+            action = ACTION_STOP
+        }
+        val stopPendingIntent = PendingIntent.getService(
+            this, 1, stopIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentTitle("Market Break")
+            .setContentText("Reopens $reopenLabel")
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setContentIntent(contentPendingIntent)
+            .addAction(0, "ပိတ်မည်", stopPendingIntent)
+            .build()
     }
 
     private fun buildNotification(value: String, isLive: Boolean): Notification {
