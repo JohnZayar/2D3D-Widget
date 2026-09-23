@@ -10,6 +10,8 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Screen ထိပ်ဆုံးက Live Bar overlay အတွက် အသစ်ထည့်ထားသည် -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <!-- Reboot/Update ဖြစ်ပြီးနောက် alarm ပြန် schedule ဖြစ်ရန် အသစ်ထည့်ထားသည် -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
         android:allowBackup="true"
@@ -38,6 +40,25 @@
         <service
             android:name=".OverlayTickerService"
             android:foregroundServiceType="dataSync"
+            android:exported="false" />
+
+        <!-- Reboot/App update ဖြစ်ပြီးနောက် App မဖွင့်ဘဲ capture alarm
+             ပြန် schedule အလိုအလျောက်ဖြစ်ရန် အသစ်ထည့်ထားသည် -->
+        <receiver
+            android:name=".BootAndUpdateReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- 9:30/12:01/2:00/4:30 capture alarm ကို App ပိတ်ထားချိန်လည်း
+             ရောက်စေဖို့ - ဒါကို manifest ထဲ declare မထားခဲ့ရင် App process
+             မရှိတော့တဲ့အခါ alarm ကို လုံးဝ လက်ခံနိုင်မှာ မဟုတ်ပါ (critical fix) -->
+        <receiver
+            android:name=".CaptureAlarmReceiver"
             android:exported="false" />
     </application>
 
