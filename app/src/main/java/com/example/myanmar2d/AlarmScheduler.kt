@@ -22,8 +22,8 @@ object AlarmScheduler {
     fun scheduleAll(context: Context) {
         schedule(context, HistoryStore.SLOT_1201, 12, 1, 6, REQUEST_CODE_SLOT_1)
         schedule(context, HistoryStore.SLOT_1630, 16, 30, 6, REQUEST_CODE_SLOT_2)
-        schedule(context, HistoryStore.SLOT_0930, 9, 30, 2, REQUEST_CODE_SLOT_0930)
-        schedule(context, HistoryStore.SLOT_1400, 14, 0, 2, REQUEST_CODE_SLOT_1400)
+        schedule(context, HistoryStore.SLOT_0930, 9, 30, 6, REQUEST_CODE_SLOT_0930)
+        schedule(context, HistoryStore.SLOT_1400, 14, 0, 6, REQUEST_CODE_SLOT_1400)
     }
 
     private fun schedule(context: Context, slotKey: String, hour: Int, minute: Int, second: Int, requestCode: Int) {
