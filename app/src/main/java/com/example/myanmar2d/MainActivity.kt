@@ -526,16 +526,24 @@ private fun secondsSinceMidnight(h: Int, m: Int, s: Int) = h * 3600 + m * 60 + s
  * when the underlying number is actually the same.
  */
 @Composable
-// Po: a still number has no thrill ("ရင်မခုန်ဘူး") — the big number keeps a
-// gentle heartbeat so viewers feel it is alive, but never fades to pale.
+// Po's spec (confirmed 2026-10-20): the big number sits SOLID and bright,
+// then BLINKS - one quick dip and straight back - about every 1.5s, like a
+// heartbeat, independent of data refreshes. Not a slow breathing fade.
 private fun rememberPulseAlpha(): Float {
     val infiniteTransition = rememberInfiniteTransition(label = "livePulse")
     val alpha by infiniteTransition.animateFloat(
         initialValue = 1f,
-        targetValue = 0.7f,
+        targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 850, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
+            animation = keyframes {
+                durationMillis = 1700
+                1f at 0
+                1f at 1250
+                0.1f at 1450
+                1f at 1650
+                1f at 1700
+            },
+            repeatMode = RepeatMode.Restart
         ),
         label = "pulseAlpha"
     )
