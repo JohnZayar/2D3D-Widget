@@ -20,10 +20,13 @@ object AlarmScheduler {
     private const val REQUEST_CODE_SLOT_1400 = 1400
 
     fun scheduleAll(context: Context) {
-        schedule(context, HistoryStore.SLOT_1201, 12, 1, 6, REQUEST_CODE_SLOT_1)
-        schedule(context, HistoryStore.SLOT_1630, 16, 30, 6, REQUEST_CODE_SLOT_2)
-        schedule(context, HistoryStore.SLOT_0930, 9, 30, 6, REQUEST_CODE_SLOT_0930)
-        schedule(context, HistoryStore.SLOT_1400, 14, 0, 6, REQUEST_CODE_SLOT_1400)
+        // Single source of truth: MarketSchedule. (Previously these were
+        // hardcoded here with slightly different seconds, drifting out of
+        // sync with the in-app schedule.)
+        schedule(context, HistoryStore.SLOT_1201, MarketSchedule.SLOT_1_H, MarketSchedule.SLOT_1_M, MarketSchedule.SLOT_1_S, REQUEST_CODE_SLOT_1)
+        schedule(context, HistoryStore.SLOT_1630, MarketSchedule.SLOT_2_H, MarketSchedule.SLOT_2_M, MarketSchedule.SLOT_2_S, REQUEST_CODE_SLOT_2)
+        schedule(context, HistoryStore.SLOT_0930, MarketSchedule.MORNING_START_H, MarketSchedule.MORNING_START_M, MarketSchedule.MORNING_START_S, REQUEST_CODE_SLOT_0930)
+        schedule(context, HistoryStore.SLOT_1400, MarketSchedule.REOPEN_H, MarketSchedule.REOPEN_M, MarketSchedule.REOPEN_S, REQUEST_CODE_SLOT_1400)
     }
 
     private fun schedule(context: Context, slotKey: String, hour: Int, minute: Int, second: Int, requestCode: Int) {

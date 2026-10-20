@@ -464,18 +464,20 @@ private data class LivePreview(
     val twoD: String get() = calculate2D(set, value)
 }
 
-private const val MORNING_START_H = 9
-private const val MORNING_START_M = 30
-private const val MORNING_START_S = 2
-private const val SLOT_1_H = 12
-private const val SLOT_1_M = 1
-private const val SLOT_1_S = 6
-private const val REOPEN_H = 14
-private const val REOPEN_M = 0
-private const val REOPEN_S = 2
-private const val SLOT_2_H = 16
-private const val SLOT_2_M = 30
-private const val SLOT_2_S = 6
+// Schedule constants come from MarketSchedule (single source of truth) -
+// previously this file kept its own copies that could drift out of sync.
+private val MORNING_START_H get() = MarketSchedule.MORNING_START_H
+private val MORNING_START_M get() = MarketSchedule.MORNING_START_M
+private val MORNING_START_S get() = MarketSchedule.MORNING_START_S
+private val SLOT_1_H get() = MarketSchedule.SLOT_1_H
+private val SLOT_1_M get() = MarketSchedule.SLOT_1_M
+private val SLOT_1_S get() = MarketSchedule.SLOT_1_S
+private val REOPEN_H get() = MarketSchedule.REOPEN_H
+private val REOPEN_M get() = MarketSchedule.REOPEN_M
+private val REOPEN_S get() = MarketSchedule.REOPEN_S
+private val SLOT_2_H get() = MarketSchedule.SLOT_2_H
+private val SLOT_2_M get() = MarketSchedule.SLOT_2_M
+private val SLOT_2_S get() = MarketSchedule.SLOT_2_S
 private const val CAPTURE_GRACE_SECONDS = 1800
 
 private fun secondsSinceMidnight(h: Int, m: Int, s: Int) = h * 3600 + m * 60 + s
@@ -597,7 +599,7 @@ private fun HomeScreen(
             if (slot0930 == null && nowSeconds in slot0930Target..(slot0930Target + CAPTURE_GRACE_SECONDS)) {
                 when (val result = SettradeRepository.fetchLiveSetIndex()) {
                     is SettradeRepository.FetchResult.Success -> {
-                        val capturedAt = timeFmt.format(now.time)
+                        val capturedAt = timeFmt.format(NetworkTime.now().time)
                         val winner = HistoryStore.recordSlotIfAbsent(context, today, HistoryStore.SLOT_0930, result.data.set, result.data.value, capturedAt)
                         slot0930 = CapturedSlot(winner.set, winner.value, today, winner.capturedAt)
                     }
@@ -607,7 +609,7 @@ private fun HomeScreen(
             if (slot1400 == null && nowSeconds in slot1400Target..(slot1400Target + CAPTURE_GRACE_SECONDS)) {
                 when (val result = SettradeRepository.fetchLiveSetIndex()) {
                     is SettradeRepository.FetchResult.Success -> {
-                        val capturedAt = timeFmt.format(now.time)
+                        val capturedAt = timeFmt.format(NetworkTime.now().time)
                         val winner = HistoryStore.recordSlotIfAbsent(context, today, HistoryStore.SLOT_1400, result.data.set, result.data.value, capturedAt)
                         slot1400 = CapturedSlot(winner.set, winner.value, today, winner.capturedAt)
                     }
@@ -618,7 +620,7 @@ private fun HomeScreen(
             if (slot1 == null && nowSeconds in slot1Target..(slot1Target + CAPTURE_GRACE_SECONDS)) {
                 when (val result = SettradeRepository.fetchLiveSetIndex()) {
                     is SettradeRepository.FetchResult.Success -> {
-                        val capturedAt = timeFmt.format(now.time)
+                        val capturedAt = timeFmt.format(NetworkTime.now().time)
                         val winner = HistoryStore.recordSlotIfAbsent(context, today, HistoryStore.SLOT_1201, result.data.set, result.data.value, capturedAt)
                         slot1 = CapturedSlot(winner.set, winner.value, today, winner.capturedAt)
                     }
@@ -628,7 +630,7 @@ private fun HomeScreen(
             if (slot2 == null && nowSeconds in slot2Target..(slot2Target + CAPTURE_GRACE_SECONDS)) {
                 when (val result = SettradeRepository.fetchLiveSetIndex()) {
                     is SettradeRepository.FetchResult.Success -> {
-                        val capturedAt = timeFmt.format(now.time)
+                        val capturedAt = timeFmt.format(NetworkTime.now().time)
                         val winner = HistoryStore.recordSlotIfAbsent(context, today, HistoryStore.SLOT_1630, result.data.set, result.data.value, capturedAt)
                         slot2 = CapturedSlot(winner.set, winner.value, today, winner.capturedAt)
                     }
