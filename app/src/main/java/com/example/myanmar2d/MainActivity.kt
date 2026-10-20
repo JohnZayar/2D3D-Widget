@@ -526,9 +526,10 @@ private fun secondsSinceMidnight(h: Int, m: Int, s: Int) = h * 3600 + m * 60 + s
  * when the underlying number is actually the same.
  */
 @Composable
-// Po's spec (confirmed 2026-10-20): the big number sits SOLID and bright,
-// then BLINKS - one quick dip and straight back - about every 1.5s, like a
-// heartbeat, independent of data refreshes. Not a slow breathing fade.
+// Po's spec (from the kalock video, confirmed 2026-10-20): the big number
+// HARD-blinks - fully VANISHES and reappears - about every 6-7 seconds,
+// independent of value changes or refreshes. Mostly solid (~5.7s), gone
+// for under a second. On/off, NOT a fade/breathing effect.
 private fun rememberPulseAlpha(): Float {
     val infiniteTransition = rememberInfiniteTransition(label = "livePulse")
     val alpha by infiniteTransition.animateFloat(
@@ -536,12 +537,12 @@ private fun rememberPulseAlpha(): Float {
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
             animation = keyframes {
-                durationMillis = 1700
+                durationMillis = 6700
                 1f at 0
-                1f at 1250
-                0.1f at 1450
-                1f at 1650
-                1f at 1700
+                1f at 5700
+                0f at 5950
+                0f at 6450
+                1f at 6700
             },
             repeatMode = RepeatMode.Restart
         ),
