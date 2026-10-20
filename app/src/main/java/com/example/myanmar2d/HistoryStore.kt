@@ -60,5 +60,46 @@ object HistoryStore {
         return dates.sortedDescending()
     }
 
+    /**
+     * The recorded finals of the session that ran immediately BEFORE the
+     * session [slotKey] opens: for the 2:00 PM opening slot that is this
+     * morning's 12:01 PM record; for the 9:30 AM opening slot it is
+     * yesterday's 4:30 PM record. Null for closing slots and when no
+     * earlier record exists.
+     */
+    fun previousSessionFinal(context: Context, date: String, slotKey: String): StoredSlot? {
+        return try {
+            when (slotKey) {
+                SLOT_1400 -> getSlot(context, date, SLOT_1201)
+                SLOT_0930 -> {
+                    val fmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+                    val parsed = fmt.parse(date) ?: return null
+                    val cal = java.util.Calendar.getInstance()
+                    cal.time = parsed
+                    cal.add(java.util.Calendar.DAY_OF_YEAR, -1)
+                    getSlot(context, fmt.format(cal.time), SLOT_1630)
+                }
+                else -> null
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /**
+     * True when [set]/[value] can only be NEW-session data. Right at the
+     * 9:30 / 2:00 openings the source page keeps showing the previous
+     * session's frozen finals for a while (its update lags the open, and
+     * a captured-to-the-second snapshot of those stale numbers is exactly
+     * the "never correct" bug). The trading Value restarts from near
+     * zero every session, so once the page starts publishing the new
+     * session the pair cannot equal the previous finals — that change,
+     * not the wall-clock second, is the reliable capture signal.
+     */
+    fun isNewSessionData(set: Double, value: Double, baseline: StoredSlot?): Boolean {
+        if (baseline == null) return true
+        return set != baseline.set || value != baseline.value
+    }
+
     private fun slotRecordKey(date: String, slotKey: String) = "slot|$date|$slotKey"
 }

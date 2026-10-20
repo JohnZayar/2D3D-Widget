@@ -599,9 +599,16 @@ private fun HomeScreen(
             if (slot0930 == null && nowSeconds in slot0930Target..(slot0930Target + CAPTURE_GRACE_SECONDS)) {
                 when (val result = SettradeRepository.fetchLiveSetIndex()) {
                     is SettradeRepository.FetchResult.Success -> {
-                        val capturedAt = timeFmt.format(NetworkTime.now().time)
-                        val winner = HistoryStore.recordSlotIfAbsent(context, today, HistoryStore.SLOT_0930, result.data.set, result.data.value, capturedAt)
-                        slot0930 = CapturedSlot(winner.set, winner.value, today, winner.capturedAt)
+                        // ဖွင့်ချိန် slot: source page က အရင် session ရဲ့ ပိတ်တန်ဖိုး
+                        // အဟောင်းတွေကိုပဲ ပြနေသေးရင် မဖမ်းဘူး — တန်ဖိုးပြောင်းသွားမှ
+                        // session အသစ် စပြီမှန်းသိပြီး ဖမ်းမယ် (မဟုတ်ရင် အဟောင်းကို
+                        // first-wins နဲ့ သော့ခတ်မိပြီး ဘယ်တော့မှ မမှန်တော့ဘူး)
+                        val baseline = HistoryStore.previousSessionFinal(context, today, HistoryStore.SLOT_0930)
+                        if (HistoryStore.isNewSessionData(result.data.set, result.data.value, baseline)) {
+                            val capturedAt = timeFmt.format(NetworkTime.now().time)
+                            val winner = HistoryStore.recordSlotIfAbsent(context, today, HistoryStore.SLOT_0930, result.data.set, result.data.value, capturedAt)
+                            slot0930 = CapturedSlot(winner.set, winner.value, today, winner.capturedAt)
+                        }
                     }
                     is SettradeRepository.FetchResult.Failure -> lastError = result.reason
                 }
@@ -609,9 +616,13 @@ private fun HomeScreen(
             if (slot1400 == null && nowSeconds in slot1400Target..(slot1400Target + CAPTURE_GRACE_SECONDS)) {
                 when (val result = SettradeRepository.fetchLiveSetIndex()) {
                     is SettradeRepository.FetchResult.Success -> {
-                        val capturedAt = timeFmt.format(NetworkTime.now().time)
-                        val winner = HistoryStore.recordSlotIfAbsent(context, today, HistoryStore.SLOT_1400, result.data.set, result.data.value, capturedAt)
-                        slot1400 = CapturedSlot(winner.set, winner.value, today, winner.capturedAt)
+                        // အပေါ်က 9:30 slot နည်းတူပဲ — နေ့လယ် session အသစ်စမှ ဖမ်းမယ်
+                        val baseline = HistoryStore.previousSessionFinal(context, today, HistoryStore.SLOT_1400)
+                        if (HistoryStore.isNewSessionData(result.data.set, result.data.value, baseline)) {
+                            val capturedAt = timeFmt.format(NetworkTime.now().time)
+                            val winner = HistoryStore.recordSlotIfAbsent(context, today, HistoryStore.SLOT_1400, result.data.set, result.data.value, capturedAt)
+                            slot1400 = CapturedSlot(winner.set, winner.value, today, winner.capturedAt)
+                        }
                     }
                     is SettradeRepository.FetchResult.Failure -> lastError = result.reason
                 }

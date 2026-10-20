@@ -23,14 +23,26 @@ object SettradeRepository {
     }
 
     suspend fun fetchLiveSetIndex(): FetchResult = withContext(Dispatchers.IO) {
-        val encodedSetOrTh = java.net.URLEncoder.encode(SET_OR_TH_URL, "UTF-8")
-        val encodedSettrade = java.net.URLEncoder.encode(SETTRADE_URL, "UTF-8")
+        // Cache-buster: the scraped pages (and the proxies in front of them)
+        // cache aggressively, and a cached page means the previous session's
+        // numbers — fatal at capture moments ("Ref ကြောင့်မှားတယ်"). A unique
+        // query on every fetch, plus no-cache headers in fetchHtml, forces
+        // the freshest page the source will serve.
+        val bust = System.currentTimeMillis()
+        val setOrThUrl = "$SET_OR_TH_URL?_cb=$bust"
+        val settradeUrl = "$SETTRADE_URL?_cb=$bust"
+        val encodedSetOrTh = java.net.URLEncoder.encode(setOrThUrl, "UTF-8")
+        val encodedSettrade = java.net.URLEncoder.encode(settradeUrl, "UTF-8")
 
         // VPN မရှိလည်း အလုပ်ဖြစ်ဖို့ - direct URL အရင်စမ်းပြီး၊ block/fail ဖြစ်ရင်
         // proxy ၃ မျိုး အဆင့်ဆင့် ထပ်စမ်းမယ်. တစ်ခုမှ အောင်ရင် ရပ်မယ်.
+        // Direct sources are attempted twice before any proxy — proxies add
+        // their own caching and delay on top of the origin's.
         val attempts = listOf(
-            SET_OR_TH_URL to ::parseSetOrTh,
-            SETTRADE_URL to ::parseSettrade,
+            setOrThUrl to ::parseSetOrTh,
+            settradeUrl to ::parseSettrade,
+            setOrThUrl to ::parseSetOrTh,
+            settradeUrl to ::parseSettrade,
             PROXY_ALLORIGINS + encodedSetOrTh to ::parseSetOrTh,
             PROXY_ALLORIGINS + encodedSettrade to ::parseSettrade,
             PROXY_CODETABS + encodedSetOrTh to ::parseSetOrTh,
@@ -78,6 +90,9 @@ object SettradeRepository {
             )
             connection.setRequestProperty("Accept", "text/html,application/xhtml+xml")
             connection.setRequestProperty("Accept-Language", "th-TH,th;q=0.9,en;q=0.8")
+            connection.setRequestProperty("Cache-Control", "no-cache, no-store, max-age=0")
+            connection.setRequestProperty("Pragma", "no-cache")
+            connection.useCaches = false
             val code = connection.responseCode
             // ဖုန်းရဲ့ clock မှန်မမှန် မငဲ့ဘဲ server ရဲ့ တကယ့်အချိန်ကို sync လုပ်မယ်
             NetworkTime.updateFromHeader(connection.getHeaderField("Date"))

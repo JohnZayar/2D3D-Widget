@@ -16,6 +16,9 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
 
 /**
  * Keeps a persistent (ongoing) notification in the status bar showing the
@@ -63,11 +66,16 @@ class TwoDForegroundService : Service() {
                 )
                 if (!MarketSchedule.isMarketLiveNow(nowSeconds)) {
                     updateBreakNotification(MarketSchedule.reopenLabel(nowSeconds))
+                    // The closing-capture moments (12:03 / 16:32) sit just
+                    // OUTSIDE the "live" windows, so the live branch never
+                    // sees them — handle closing captures from here.
+                    maybeCaptureClosing()
                 } else {
                     when (val result = SettradeRepository.fetchLiveSetIndex()) {
                         is SettradeRepository.FetchResult.Success -> {
                             lastKnownTwoD = result.data.twoD
                             updateNotification(lastKnownTwoD, isLive = true)
+                            maybeCapture(result.data)
                         }
                         is SettradeRepository.FetchResult.Failure -> {
                             updateNotification(lastKnownTwoD, isLive = false)
@@ -77,6 +85,104 @@ class TwoDForegroundService : Service() {
                 delay(POLL_INTERVAL_MS)
             }
         }
+    }
+
+    /**
+     * Slot capture, owned by this always-running service so captures happen
+     * whether or not anyone opens the app. The exact alarms
+     * (CaptureAlarmReceiver) run the same rules as a backup path; whichever
+     * records first wins and the other path sees the slot already stored.
+     *
+     * Opening slots (9:30 / 2:00) record only once the fetched numbers are
+     * provably the NEW session's (see HistoryStore.isNewSessionData) — the
+     * service polls every 20s, so a still-stale page just means "check again
+     * on the next poll" instead of locking in the previous session's finals.
+     * Closing slots record at their delayed targets (12:03 / 16:32), when
+     * the finals are published and frozen.
+     */
+    private fun maybeCapture(data: SettradeRepository.LiveMarketData) {
+        try {
+            val ctx = applicationContext
+            val nowCal = NetworkTime.now()
+            val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(nowCal.time)
+            val capturedAt = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(nowCal.time)
+            val nowSeconds = MarketSchedule.secondsSinceMidnight(
+                nowCal.get(Calendar.HOUR_OF_DAY), nowCal.get(Calendar.MINUTE), nowCal.get(Calendar.SECOND)
+            )
+            captureOpeningSlot(
+                ctx, today, HistoryStore.SLOT_0930,
+                MarketSchedule.secondsSinceMidnight(MarketSchedule.MORNING_START_H, MarketSchedule.MORNING_START_M, MarketSchedule.MORNING_START_S),
+                data, capturedAt, nowSeconds
+            )
+            captureOpeningSlot(
+                ctx, today, HistoryStore.SLOT_1400,
+                MarketSchedule.secondsSinceMidnight(MarketSchedule.REOPEN_H, MarketSchedule.REOPEN_M, MarketSchedule.REOPEN_S),
+                data, capturedAt, nowSeconds
+            )
+            captureClosingSlot(
+                ctx, today, HistoryStore.SLOT_1201,
+                MarketSchedule.secondsSinceMidnight(MarketSchedule.SLOT_1_H, MarketSchedule.SLOT_1_M, MarketSchedule.SLOT_1_S),
+                data, capturedAt, nowSeconds
+            )
+            captureClosingSlot(
+                ctx, today, HistoryStore.SLOT_1630,
+                MarketSchedule.secondsSinceMidnight(MarketSchedule.SLOT_2_H, MarketSchedule.SLOT_2_M, MarketSchedule.SLOT_2_S),
+                data, capturedAt, nowSeconds
+            )
+        } catch (ignored: Exception) {
+        }
+    }
+
+    /** Closing slots only — called from the not-live branch around 12:03 / 16:32. */
+    private suspend fun maybeCaptureClosing() {
+        try {
+            val ctx = applicationContext
+            val nowCal = NetworkTime.now()
+            val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(nowCal.time)
+            val nowSeconds = MarketSchedule.secondsSinceMidnight(
+                nowCal.get(Calendar.HOUR_OF_DAY), nowCal.get(Calendar.MINUTE), nowCal.get(Calendar.SECOND)
+            )
+            val slot1Target = MarketSchedule.secondsSinceMidnight(MarketSchedule.SLOT_1_H, MarketSchedule.SLOT_1_M, MarketSchedule.SLOT_1_S)
+            val slot2Target = MarketSchedule.secondsSinceMidnight(MarketSchedule.SLOT_2_H, MarketSchedule.SLOT_2_M, MarketSchedule.SLOT_2_S)
+            val slot1Due = nowSeconds in slot1Target..(slot1Target + CLOSE_CAPTURE_WINDOW_SECONDS) &&
+                HistoryStore.getSlot(ctx, today, HistoryStore.SLOT_1201) == null
+            val slot2Due = nowSeconds in slot2Target..(slot2Target + CLOSE_CAPTURE_WINDOW_SECONDS) &&
+                HistoryStore.getSlot(ctx, today, HistoryStore.SLOT_1630) == null
+            if (!slot1Due && !slot2Due) return
+            when (val result = SettradeRepository.fetchLiveSetIndex()) {
+                is SettradeRepository.FetchResult.Success -> {
+                    val capturedAt = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(NetworkTime.now().time)
+                    if (slot1Due) {
+                        HistoryStore.recordSlotIfAbsent(ctx, today, HistoryStore.SLOT_1201, result.data.set, result.data.value, capturedAt)
+                    }
+                    if (slot2Due) {
+                        HistoryStore.recordSlotIfAbsent(ctx, today, HistoryStore.SLOT_1630, result.data.set, result.data.value, capturedAt)
+                    }
+                }
+                is SettradeRepository.FetchResult.Failure -> {}
+            }
+        } catch (ignored: Exception) {
+        }
+    }
+
+    private fun captureOpeningSlot(
+        context: Context, today: String, slotKey: String, targetSeconds: Int,
+        data: SettradeRepository.LiveMarketData, capturedAt: String, nowSeconds: Int
+    ) {
+        if (nowSeconds < targetSeconds || nowSeconds > targetSeconds + OPEN_CAPTURE_WINDOW_SECONDS) return
+        if (HistoryStore.getSlot(context, today, slotKey) != null) return
+        val baseline = HistoryStore.previousSessionFinal(context, today, slotKey)
+        if (!HistoryStore.isNewSessionData(data.set, data.value, baseline)) return
+        HistoryStore.recordSlotIfAbsent(context, today, slotKey, data.set, data.value, capturedAt)
+    }
+
+    private fun captureClosingSlot(
+        context: Context, today: String, slotKey: String, targetSeconds: Int,
+        data: SettradeRepository.LiveMarketData, capturedAt: String, nowSeconds: Int
+    ) {
+        if (nowSeconds < targetSeconds || nowSeconds > targetSeconds + CLOSE_CAPTURE_WINDOW_SECONDS) return
+        if (HistoryStore.getSlot(context, today, slotKey) != null) return
+        HistoryStore.recordSlotIfAbsent(context, today, slotKey, data.set, data.value, capturedAt)
     }
 
     private fun updateBreakNotification(reopenLabel: String) {
@@ -173,12 +279,18 @@ class TwoDForegroundService : Service() {
         // purpose, to avoid hammering the source site continuously all day.
         const val POLL_INTERVAL_MS = 20_000L
 
+        // How long after an opening (9:30 / 2:00) the service keeps trying to
+        // catch the first new-session numbers, and how long after a closing
+        // target (12:03 / 16:32) a closing capture stays valid.
+        const val OPEN_CAPTURE_WINDOW_SECONDS = 600
+        const val CLOSE_CAPTURE_WINDOW_SECONDS = 1800
+
         private const val PREFS_NAME = "myanmar2d_settings"
         private const val KEY_ENABLED = "live_notification_enabled"
 
         fun isEnabledPref(context: Context): Boolean =
             context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                .getBoolean(KEY_ENABLED, false)
+                .getBoolean(KEY_ENABLED, true)
 
         fun setEnabledPref(context: Context, enabled: Boolean) {
             context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)

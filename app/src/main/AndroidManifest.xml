@@ -12,6 +12,13 @@
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <!-- Reboot/Update ဖြစ်ပြီးနောက် alarm ပြန် schedule ဖြစ်ရန် အသစ်ထည့်ထားသည် -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Capture alarm အချိန်အတိအကျ ရောက်ရန် - ဒါတွေ မပါခဲ့လို့ Android 12+
+         မှာ setExactAndAllowWhileIdle က SecurityException ဖြစ်ပြီး alarm လုံးဝ
+         schedule မဖြစ်ခဲ့ပါ (App ဖွင့်မှသာ run တယ်လို့ ထင်ရတဲ့ အကြောင်းရင်း)။
+         USE_EXACT_ALARM = Android 13+ မှာ install လုပ်တာနဲ့ အလိုအလျောက် ခွင့်ပြုပြီး;
+         SCHEDULE_EXACT_ALARM = Android 12 အတွက် -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
     <application
         android:allowBackup="true"

@@ -26,6 +26,18 @@ class BootAndUpdateReceiver : BroadcastReceiver() {
             "android.intent.action.QUICKBOOT_POWERON",
             Intent.ACTION_MY_PACKAGE_REPLACED -> {
                 AlarmScheduler.scheduleAll(context.applicationContext)
+                // The foreground service is the always-on capture engine —
+                // bring it back too, so nothing depends on the app being
+                // opened again after a reboot or an update. (Boot/update
+                // broadcasts are exempt from background FGS-start limits;
+                // the try/catch keeps any OEM refusal harmless because the
+                // alarms above still cover the captures.)
+                if (TwoDForegroundService.isEnabledPref(context.applicationContext)) {
+                    try {
+                        TwoDForegroundService.start(context.applicationContext)
+                    } catch (ignored: Exception) {
+                    }
+                }
             }
         }
     }
