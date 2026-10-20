@@ -530,9 +530,9 @@ private fun rememberPulseAlpha(): Float {
     val infiniteTransition = rememberInfiniteTransition(label = "livePulse")
     val alpha by infiniteTransition.animateFloat(
         initialValue = 1f,
-        targetValue = 0.88f,
+        targetValue = 0.25f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 900, easing = LinearEasing),
+            animation = tween(durationMillis = 750, easing = LinearEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "pulseAlpha"
@@ -800,7 +800,8 @@ private fun HomeScreen(
                         text = livePreviewShared.twoD,
                         fontSize = 110.sp,
                         fontWeight = FontWeight.Bold,
-                        color = GoldGreen
+                        color = GoldGreen,
+                        modifier = Modifier.alpha(rememberPulseAlpha())
                     )
                     Spacer(Modifier.height(8.dp))
                     Text(
