@@ -526,20 +526,6 @@ private fun secondsSinceMidnight(h: Int, m: Int, s: Int) = h * 3600 + m * 60 + s
  * when the underlying number is actually the same.
  */
 @Composable
-private fun rememberPulseAlpha(): Float {
-    val infiniteTransition = rememberInfiniteTransition(label = "livePulse")
-    val alpha by infiniteTransition.animateFloat(
-        initialValue = 1f,
-        targetValue = 0.25f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 750, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulseAlpha"
-    )
-    return alpha
-}
-
 private enum class HeadlinePhase { IDLE_BEFORE_START, LIVE, FROZEN_MORNING, FROZEN_EVENING, PENDING_MORNING, PENDING_EVENING }
 
 /** True only during the two live-trading windows: 9:30-12:01 and 14:00-16:30. */
@@ -592,6 +578,16 @@ private fun HomeScreen(
     var slot1400 by remember { mutableStateOf<CapturedSlot?>(null) }
     var lastResetDate by remember { mutableStateOf("") }
     var lastError by remember { mutableStateOf<String?>(null) }
+
+    // kalock-style refresh blink: the big number stays SOLID green and only
+    // dips for a moment when a fresh live value lands (not a constant pulse).
+    val numberFlash = remember { Animatable(1f) }
+    LaunchedEffect(livePreviewShared?.time) {
+        if (livePreviewShared != null) {
+            numberFlash.snapTo(0.1f)
+            numberFlash.animateTo(1f, animationSpec = tween(durationMillis = 550))
+        }
+    }
 
     val dateFmt = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()) }
     val timeFmt = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
@@ -801,7 +797,7 @@ private fun HomeScreen(
                         fontSize = 110.sp,
                         fontWeight = FontWeight.Bold,
                         color = GoldGreen,
-                        modifier = Modifier.alpha(rememberPulseAlpha())
+                        modifier = Modifier.alpha(numberFlash.value)
                     )
                     Spacer(Modifier.height(8.dp))
                     Text(
@@ -899,7 +895,7 @@ private fun SlotCard(
             } else {
                 val useLive = liveWindowActive && slot == null
                 val rowModifier = if (useLive) {
-                    Modifier.fillMaxWidth().alpha(rememberPulseAlpha())
+                    Modifier.fillMaxWidth()
                 } else {
                     Modifier.fillMaxWidth()
                 }
