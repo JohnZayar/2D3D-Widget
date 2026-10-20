@@ -37,6 +37,7 @@ class TwoDForegroundService : Service() {
     private val scope = CoroutineScope(Dispatchers.Default + Job())
     private var lastKnownTwoD: String = "--"
     private var lastGloAttemptMs: Long = 0L
+    private var alarmsResynced = false
 
     override fun onCreate() {
         super.onCreate()
@@ -60,6 +61,10 @@ class TwoDForegroundService : Service() {
         scope.launch {
             while (true) {
                 maybePollGlo()
+                if (!alarmsResynced && NetworkTime.isSynced()) {
+                    alarmsResynced = true
+                    try { AlarmScheduler.scheduleAll(applicationContext) } catch (ignored: Exception) {}
+                }
                 val nowCal = NetworkTime.now()
                 val nowSeconds = MarketSchedule.secondsSinceMidnight(
                     nowCal.get(java.util.Calendar.HOUR_OF_DAY),
