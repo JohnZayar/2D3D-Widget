@@ -76,6 +76,29 @@ object GloRepository {
         )
     }
 
+    /** "yyyy-MM-dd" key of the draw period (1st/16th) currently in effect. */
+    fun currentPeriodKey(): String = keyFmt.format(currentPeriodCalendar().time)
+
+    /** True once this period's result has been fetched and frozen locally. */
+    fun hasCurrentPeriodResult(context: Context): Boolean =
+        readCached(context)?.drawDateKey == currentPeriodKey()
+
+    /**
+     * True during the window when a draw's result is about to be published:
+     * a draw day (1st/16th) from 14:30 local time onwards. The first prize
+     * is announced near the end of the afternoon live draw (~15:17 Myanmar
+     * time), but the official API can lag the broadcast — so during this
+     * window callers should poll [fetchAndFreeze] about once a minute
+     * instead of every 15 minutes, and stop as soon as
+     * [hasCurrentPeriodResult] turns true.
+     */
+    fun isDrawPending(now: Calendar = Calendar.getInstance()): Boolean {
+        val day = now.get(Calendar.DAY_OF_MONTH)
+        if (day != 1 && day != 16) return false
+        val minutes = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE)
+        return minutes >= 14 * 60 + 30
+    }
+
     data class HistoryEntry(val drawDateKey: String, val firstPrize: String) {
         val last3: String get() = firstPrize.takeLast(3)
     }

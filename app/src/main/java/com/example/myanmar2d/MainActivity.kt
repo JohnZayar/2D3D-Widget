@@ -32,6 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
@@ -53,6 +54,15 @@ private val RedCard = Color(0xFFF44336)
 private val GreenPill = Color(0xFF4CAF50)
 private val GoldGreen = Color(0xFF43A047)
 private val TickerBg = Color(0xFF111111)
+
+// Restyle palette (v1.2): same yellow/red identity, cleaner execution —
+// gold gradient header, deep-red gradient result cards, dark ink accents.
+private val GoldDeep = Color(0xFFFFB300)
+private val RedCardLight = Color(0xFFEF5350)
+private val RedCardDeep = Color(0xFFC62828)
+private val InkDark = Color(0xFF212121)
+private val RedCardBrush: Brush
+    get() = Brush.verticalGradient(listOf(RedCardLight, RedCardDeep))
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -181,7 +191,12 @@ private fun AppRoot() {
                 is GloRepository.FetchResult.Success -> thaiLottery = result.data
                 is GloRepository.FetchResult.Failure -> {} // keep showing whatever's cached
             }
-            delay(15 * 60 * 1000L) // recheck every 15 minutes
+            // Draw-day afternoons, while the result is about to publish:
+            // recheck every minute so the 3D number shows as soon as the
+            // API posts it. Otherwise every 15 minutes is plenty.
+            val drawPending = GloRepository.isDrawPending() &&
+                !GloRepository.hasCurrentPeriodResult(context)
+            delay(if (drawPending) 60_000L else 15 * 60 * 1000L)
         }
     }
 
@@ -351,9 +366,9 @@ private fun ThaiHistoryScreen() {
             val todayKey = keyFmt.format(now.time)
             val confirmedToday = cached?.takeIf { it.drawDateKey == todayKey }
 
-            Surface(color = RedCard, modifier = Modifier.fillMaxWidth()) {
+            Surface(color = Color.Transparent, modifier = Modifier.fillMaxWidth()) {
                 Column(
-                    Modifier.padding(20.dp).fillMaxWidth(),
+                    Modifier.background(RedCardBrush).padding(20.dp).fillMaxWidth(),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     if (confirmedToday != null) {
@@ -383,9 +398,9 @@ private fun ThaiHistoryScreen() {
 
         LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             items(history) { entry ->
-                Surface(shape = RoundedCornerShape(16.dp), color = GreenPill, modifier = Modifier.fillMaxWidth()) {
+                Surface(shape = RoundedCornerShape(20.dp), color = Color.Transparent, shadowElevation = 4.dp, modifier = Modifier.fillMaxWidth()) {
                     Row(
-                        Modifier.padding(20.dp).fillMaxWidth(),
+                        Modifier.background(RedCardBrush, RoundedCornerShape(20.dp)).padding(20.dp).fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -395,6 +410,21 @@ private fun ThaiHistoryScreen() {
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun TabPill(label: String, selected: Boolean, onClick: () -> Unit) {
+    TextButton(
+        onClick = onClick,
+        shape = RoundedCornerShape(50),
+        colors = ButtonDefaults.textButtonColors(
+            containerColor = if (selected) InkDark else Color.Transparent,
+            contentColor = if (selected) YellowTop else InkDark
+        ),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+    ) {
+        Text(label, fontWeight = FontWeight.Bold, fontSize = 14.sp)
     }
 }
 
@@ -409,16 +439,20 @@ private fun TopBar(
 ) {
     var showLiveSettings by remember { mutableStateOf(false) }
 
-    Column(Modifier.fillMaxWidth().background(YellowTop).padding(horizontal = 16.dp, vertical = 10.dp)) {
+    Column(
+        Modifier.fillMaxWidth()
+            .background(Brush.verticalGradient(listOf(YellowTop, GoldDeep)))
+            .padding(horizontal = 16.dp, vertical = 10.dp)
+    ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
             Column {
                 Text("Myanmar 2D", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.Black)
-                Text("v1.0", fontSize = 11.sp, color = Color.DarkGray)
+                Text("v${BuildConfig.VERSION_NAME}", fontSize = 11.sp, color = Color.DarkGray)
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = { onTabSelected(Tab.RESULTS_2D) }) { Text("2D", fontWeight = FontWeight.Bold) }
-                TextButton(onClick = { onTabSelected(Tab.RESULTS_3D) }) { Text("3D", fontWeight = FontWeight.Bold, color = Color(0xFF1565C0)) }
-                TextButton(onClick = { onTabSelected(Tab.HOME) }) { Text("Home") }
+                TabPill("2D", current == Tab.RESULTS_2D) { onTabSelected(Tab.RESULTS_2D) }
+                TabPill("3D", current == Tab.RESULTS_3D) { onTabSelected(Tab.RESULTS_3D) }
+                TabPill("Home", current == Tab.HOME) { onTabSelected(Tab.HOME) }
 
                 Box {
                     IconButton(onClick = { showLiveSettings = true }) {
@@ -762,7 +796,7 @@ private fun HomeScreen(
                         text = livePreviewShared.twoD,
                         fontSize = 110.sp,
                         fontWeight = FontWeight.Bold,
-                        color = GoldGreen,
+                        color = RedCardDeep,
                         modifier = Modifier.alpha(rememberPulseAlpha())
                     )
                     Spacer(Modifier.height(8.dp))
@@ -772,7 +806,7 @@ private fun HomeScreen(
                         color = Color.DarkGray
                     )
                 } else {
-                    CircularProgressIndicator(color = GoldGreen)
+                    CircularProgressIndicator(color = RedCardDeep)
                     Spacer(Modifier.height(8.dp))
                     Text("Fetching live SET Index...", fontSize = 14.sp, color = Color.DarkGray)
                 }
@@ -784,7 +818,7 @@ private fun HomeScreen(
             Text(
                 "Last fetch issue: $it",
                 fontSize = 11.sp,
-                color = Color(0xFFD32F2F),
+                color = RedCardDeep,
                 modifier = Modifier.padding(horizontal = 8.dp)
             )
         }
@@ -840,8 +874,11 @@ private fun SlotCard(
     liveWindowActive: Boolean,
     compact: Boolean = false
 ) {
-    Surface(shape = RoundedCornerShape(16.dp), color = RedCard, modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+    Surface(shape = RoundedCornerShape(20.dp), color = Color.Transparent, shadowElevation = 6.dp, modifier = Modifier.fillMaxWidth()) {
+        Column(
+            Modifier.background(RedCardBrush, RoundedCornerShape(20.dp)).padding(20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
             Text(label, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Color.White)
             Spacer(Modifier.height(4.dp))
             Spacer(Modifier.height(8.dp))
@@ -921,16 +958,19 @@ private fun ResultsList3D() {
 @Composable
 private fun DatePill(text: String) {
     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-        Surface(shape = RoundedCornerShape(50), color = GreenPill) {
-            Text(text, color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 24.dp, vertical = 10.dp))
+        Surface(shape = RoundedCornerShape(50), color = InkDark) {
+            Text(text, color = YellowTop, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 24.dp, vertical = 10.dp))
         }
     }
 }
 
 @Composable
 private fun ResultCard(result: TwoDResult) {
-    Surface(shape = RoundedCornerShape(16.dp), color = RedCard, modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+    Surface(shape = RoundedCornerShape(20.dp), color = Color.Transparent, shadowElevation = 6.dp, modifier = Modifier.fillMaxWidth()) {
+        Column(
+            Modifier.background(RedCardBrush, RoundedCornerShape(20.dp)).padding(20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
             Text(result.time, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Color.White)
             Spacer(Modifier.height(12.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -944,9 +984,9 @@ private fun ResultCard(result: TwoDResult) {
 
 @Composable
 private fun ThreeDCard(result: ThreeDResult) {
-    Surface(shape = RoundedCornerShape(16.dp), color = GreenPill, modifier = Modifier.fillMaxWidth()) {
+    Surface(shape = RoundedCornerShape(20.dp), color = Color.Transparent, shadowElevation = 4.dp, modifier = Modifier.fillMaxWidth()) {
         Row(
-            Modifier.padding(20.dp).fillMaxWidth(),
+            Modifier.background(RedCardBrush, RoundedCornerShape(20.dp)).padding(20.dp).fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {

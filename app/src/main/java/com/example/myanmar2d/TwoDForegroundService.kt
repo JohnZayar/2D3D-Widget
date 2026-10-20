@@ -36,6 +36,7 @@ class TwoDForegroundService : Service() {
 
     private val scope = CoroutineScope(Dispatchers.Default + Job())
     private var lastKnownTwoD: String = "--"
+    private var lastGloAttemptMs: Long = 0L
 
     override fun onCreate() {
         super.onCreate()
@@ -58,6 +59,7 @@ class TwoDForegroundService : Service() {
     private fun startUpdating() {
         scope.launch {
             while (true) {
+                maybePollGlo()
                 val nowCal = NetworkTime.now()
                 val nowSeconds = MarketSchedule.secondsSinceMidnight(
                     nowCal.get(java.util.Calendar.HOUR_OF_DAY),
@@ -84,6 +86,28 @@ class TwoDForegroundService : Service() {
                 }
                 delay(POLL_INTERVAL_MS)
             }
+        }
+    }
+
+    /**
+     * 3D (Thai GLO) draw-day polling, so the 3D number lands on its own —
+     * no need for anyone to open the app or sit on the 3D tab. The main
+     * loop ticks every 20s; on draw days (1st/16th) from 14:30 local this
+     * checks the official GLO API about once a minute until this period's
+     * result is frozen, then stops by itself. (Before this, nothing polled
+     * GLO in the background at all: the number only updated while the app
+     * was open — the 15-minute in-app loop — which is why it could sit
+     * unposted until ~4 PM even though the result was out at ~3:17.)
+     */
+    private suspend fun maybePollGlo() {
+        try {
+            if (!GloRepository.isDrawPending()) return
+            if (GloRepository.hasCurrentPeriodResult(applicationContext)) return
+            val nowMs = System.currentTimeMillis()
+            if (nowMs - lastGloAttemptMs < GLO_POLL_INTERVAL_MS) return
+            lastGloAttemptMs = nowMs
+            GloRepository.fetchAndFreeze(applicationContext)
+        } catch (ignored: Exception) {
         }
     }
 
@@ -284,6 +308,9 @@ class TwoDForegroundService : Service() {
         // target (12:03 / 16:32) a closing capture stays valid.
         const val OPEN_CAPTURE_WINDOW_SECONDS = 600
         const val CLOSE_CAPTURE_WINDOW_SECONDS = 1800
+
+        // 3D draw-day polling cadence (see maybePollGlo).
+        const val GLO_POLL_INTERVAL_MS = 60_000L
 
         private const val PREFS_NAME = "myanmar2d_settings"
         private const val KEY_ENABLED = "live_notification_enabled"
