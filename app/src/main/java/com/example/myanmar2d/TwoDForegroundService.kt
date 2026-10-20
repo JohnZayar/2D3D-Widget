@@ -68,7 +68,7 @@ class TwoDForegroundService : Service() {
                 )
                 if (!MarketSchedule.isMarketLiveNow(nowSeconds)) {
                     updateBreakNotification(MarketSchedule.reopenLabel(nowSeconds))
-                    // The closing-capture moments (12:03 / 16:32) sit just
+                    // The closing-capture moments (12:01:05 / 16:30:05) sit just
                     // OUTSIDE the "live" windows, so the live branch never
                     // sees them — handle closing captures from here.
                     maybeCaptureClosing()
@@ -121,8 +121,8 @@ class TwoDForegroundService : Service() {
      * provably the NEW session's (see HistoryStore.isNewSessionData) — the
      * service polls every 20s, so a still-stale page just means "check again
      * on the next poll" instead of locking in the previous session's finals.
-     * Closing slots record at their delayed targets (12:03 / 16:32), when
-     * the finals are published and frozen.
+     * Closing slots record at the official close + 5s (12:01:05 / 16:30:05),
+     * when the finals are frozen and the standard app confirms them.
      */
     private fun maybeCapture(data: SettradeRepository.LiveMarketData) {
         try {
