@@ -372,17 +372,17 @@ private fun ThaiHistoryScreen() {
 
             Surface(color = Color.Transparent, modifier = Modifier.fillMaxWidth()) {
                 Column(
-                    Modifier.background(YellowCardBrush).padding(20.dp).fillMaxWidth(),
+                    Modifier.background(RedCard).padding(20.dp).fillMaxWidth(),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     if (confirmedToday != null) {
-                        Text(confirmedToday.last3, fontSize = 64.sp, fontWeight = FontWeight.Bold, color = GoldGreen)
+                        Text(confirmedToday.last3, fontSize = 64.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFFEB3B))
                         Spacer(Modifier.height(8.dp))
-                        Text("Confirmed \u2022 $todayKey", fontSize = 13.sp, color = InkDark)
+                        Text("Confirmed \u2022 $todayKey", fontSize = 13.sp, color = Color.White)
                     } else {
-                        CircularProgressIndicator(color = InkDark, modifier = Modifier.size(28.dp))
+                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(28.dp))
                         Spacer(Modifier.height(8.dp))
-                        Text("Live \u2022 ရလဒ်ကို ခဏစောင့်ပါ", fontSize = 14.sp, color = InkDark)
+                        Text("Live \u2022 ရလဒ်ကို ခဏစောင့်ပါ", fontSize = 14.sp, color = Color.White)
                     }
                 }
             }
@@ -404,12 +404,12 @@ private fun ThaiHistoryScreen() {
             items(history) { entry ->
                 Surface(shape = RoundedCornerShape(20.dp), color = Color.Transparent, shadowElevation = 4.dp, modifier = Modifier.fillMaxWidth()) {
                     Row(
-                        Modifier.background(YellowCardBrush, RoundedCornerShape(20.dp)).padding(20.dp).fillMaxWidth(),
+                        Modifier.background(RedCard, RoundedCornerShape(20.dp)).padding(20.dp).fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        LabeledValue("Date", entry.drawDateKey, valueColor = InkDark)
-                        LabeledValue("3D", entry.last3, valueColor = GoldGreen, big = true)
+                        LabeledValue("Date", entry.drawDateKey, valueColor = Color.White)
+                        LabeledValue("3D", entry.last3, valueColor = Color(0xFFFFEB3B), big = true)
                     }
                 }
             }
@@ -883,10 +883,10 @@ private fun SlotCard(
 ) {
     Surface(shape = RoundedCornerShape(20.dp), color = Color.Transparent, shadowElevation = 6.dp, modifier = Modifier.fillMaxWidth()) {
         Column(
-            Modifier.background(YellowCardBrush, RoundedCornerShape(20.dp)).padding(20.dp),
+            Modifier.background(RedCard, RoundedCornerShape(20.dp)).padding(20.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(label, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = InkDark)
+            Text(label, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Color.White)
             Spacer(Modifier.height(4.dp))
             Spacer(Modifier.height(8.dp))
 
@@ -897,7 +897,7 @@ private fun SlotCard(
                     text = twoDText,
                     fontSize = 44.sp,
                     fontWeight = FontWeight.Bold,
-                    color = GoldGreen
+                    color = Color(0xFFFFEB3B)
                 )
             } else {
                 val useLive = liveWindowActive && slot == null
@@ -912,7 +912,7 @@ private fun SlotCard(
                     val valueText = slot?.let { "%,.2f".format(it.value) } ?: (if (useLive) live?.let { "%,.2f".format(it.value) } else null) ?: "--"
                     LabeledValue("SET", setText)
                     LabeledValue("Value", valueText)
-                    LabeledValue("2D", twoDText, valueColor = GoldGreen, big = true)
+                    LabeledValue("2D", twoDText, valueColor = Color(0xFFFFEB3B), big = true)
                 }
             }
         }
@@ -975,15 +975,15 @@ private fun DatePill(text: String) {
 private fun ResultCard(result: TwoDResult) {
     Surface(shape = RoundedCornerShape(20.dp), color = Color.Transparent, shadowElevation = 6.dp, modifier = Modifier.fillMaxWidth()) {
         Column(
-            Modifier.background(YellowCardBrush, RoundedCornerShape(20.dp)).padding(20.dp),
+            Modifier.background(RedCard, RoundedCornerShape(20.dp)).padding(20.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(result.time, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = InkDark)
+            Text(result.time, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Color.White)
             Spacer(Modifier.height(12.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 LabeledValue("SET", "%.2f".format(result.set))
                 LabeledValue("Value", "%,.2f".format(result.value))
-                LabeledValue("2D", result.twoD, valueColor = GoldGreen, big = true)
+                LabeledValue("2D", result.twoD, valueColor = Color(0xFFFFEB3B), big = true)
             }
         }
     }
@@ -993,20 +993,20 @@ private fun ResultCard(result: TwoDResult) {
 private fun ThreeDCard(result: ThreeDResult) {
     Surface(shape = RoundedCornerShape(20.dp), color = Color.Transparent, shadowElevation = 4.dp, modifier = Modifier.fillMaxWidth()) {
         Row(
-            Modifier.background(YellowCardBrush, RoundedCornerShape(20.dp)).padding(20.dp).fillMaxWidth(),
+            Modifier.background(RedCard, RoundedCornerShape(20.dp)).padding(20.dp).fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            LabeledValue("Date", result.date, valueColor = InkDark)
-            LabeledValue("3D", result.threeD, valueColor = GoldGreen, big = true)
+            LabeledValue("Date", result.date, valueColor = Color.White)
+            LabeledValue("3D", result.threeD, valueColor = Color(0xFFFFEB3B), big = true)
         }
     }
 }
 
 @Composable
-private fun LabeledValue(label: String, value: String, valueColor: Color = InkDark, big: Boolean = false, modifier: Modifier = Modifier) {
+private fun LabeledValue(label: String, value: String, valueColor: Color = Color.White, big: Boolean = false, modifier: Modifier = Modifier) {
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(label, fontSize = 13.sp, color = InkDark.copy(alpha = 0.6f))
+        Text(label, fontSize = 13.sp, color = Color.White.copy(alpha = 0.75f))
         Spacer(Modifier.height(4.dp))
         Text(
             value,
