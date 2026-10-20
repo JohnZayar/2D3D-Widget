@@ -526,6 +526,22 @@ private fun secondsSinceMidnight(h: Int, m: Int, s: Int) = h * 3600 + m * 60 + s
  * when the underlying number is actually the same.
  */
 @Composable
+// Po: a still number has no thrill ("ရင်မခုန်ဘူး") — the big number keeps a
+// gentle heartbeat so viewers feel it is alive, but never fades to pale.
+private fun rememberPulseAlpha(): Float {
+    val infiniteTransition = rememberInfiniteTransition(label = "livePulse")
+    val alpha by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = 0.7f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 850, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulseAlpha"
+    )
+    return alpha
+}
+
 private enum class HeadlinePhase { IDLE_BEFORE_START, LIVE, FROZEN_MORNING, FROZEN_EVENING, PENDING_MORNING, PENDING_EVENING }
 
 /** True only during the two live-trading windows: 9:30-12:01 and 14:00-16:30. */
@@ -579,15 +595,6 @@ private fun HomeScreen(
     var lastResetDate by remember { mutableStateOf("") }
     var lastError by remember { mutableStateOf<String?>(null) }
 
-    // kalock-style refresh blink: the big number stays SOLID green and only
-    // dips for a moment when a fresh live value lands (not a constant pulse).
-    val numberFlash = remember { Animatable(1f) }
-    LaunchedEffect(livePreviewShared?.time) {
-        if (livePreviewShared != null) {
-            numberFlash.snapTo(0.1f)
-            numberFlash.animateTo(1f, animationSpec = tween(durationMillis = 550))
-        }
-    }
 
     val dateFmt = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()) }
     val timeFmt = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
@@ -797,7 +804,7 @@ private fun HomeScreen(
                         fontSize = 110.sp,
                         fontWeight = FontWeight.Bold,
                         color = GoldGreen,
-                        modifier = Modifier.alpha(numberFlash.value)
+                        modifier = Modifier.alpha(rememberPulseAlpha())
                     )
                     Spacer(Modifier.height(8.dp))
                     Text(
