@@ -181,7 +181,7 @@ private fun AppRoot() {
                 }
                 is SettradeRepository.FetchResult.Failure -> {}
             }
-            delay(4000)
+            delay(2000)
         }
     }
 

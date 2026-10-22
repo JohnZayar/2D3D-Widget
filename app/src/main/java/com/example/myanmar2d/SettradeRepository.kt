@@ -1,14 +1,27 @@
 package com.example.myanmar2d
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.TimeZone
 
 object SettradeRepository {
 
     private const val SET_OR_TH_URL = "https://www.set.or.th/en/market/index/set/overview"
     private const val SETTRADE_URL = "https://www.settrade.com/th/equities/market-summary/overview"
+
+    private const val MOBILE_UA =
+        "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Mobile Safari/537.36"
+    // set.or.th sits behind Incapsula, which serves a ~950-byte bot-wall
+    // shell to most mobile-UA requests; a desktop UA passes far more often
+    // (proven by the set_logger dual-feed runs, 2026-10-21/22).
+    private const val WIN_UA =
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
     private const val PROXY_ALLORIGINS = "https://api.allorigins.win/raw?url="
     private const val PROXY_CODETABS = "https://api.codetabs.com/v1/proxy?quest="
     private const val PROXY_CORSPROXY = "https://corsproxy.io/?url="
@@ -34,13 +47,26 @@ object SettradeRepository {
         val encodedSetOrTh = java.net.URLEncoder.encode(setOrThUrl, "UTF-8")
         val encodedSettrade = java.net.URLEncoder.encode(settradeUrl, "UTF-8")
 
+        // v1.3.8 speed pass (Po, 2026-10-22: the app visibly trailed other
+        // apps while the numbers were moving). Fetch BOTH direct sources in
+        // PARALLEL and keep the freshest print: set.or.th leads settrade by
+        // seconds during churn, but its bot-wall (and occasional stale cache
+        // pages) used to push the app onto the slower source. Freshness is
+        // judged by the page's own "Last Update" stamp (Bangkok time).
+        val (orth, trade) = coroutineScope {
+            val o = async { fetchSetOrThDirect(setOrThUrl) }
+            val t = async { tryFetch(settradeUrl, ::parseSettrade) }
+            o.await() to t.await()
+        }
+        if (orth != null && orth.fresh) return@withContext FetchResult.Success(orth.data)
+        if (trade is FetchResult.Success) return@withContext trade
+        if (orth != null) return@withContext FetchResult.Success(orth.data)
+
         // VPN မရှိလည်း အလုပ်ဖြစ်ဖို့ - direct URL အရင်စမ်းပြီး၊ block/fail ဖြစ်ရင်
         // proxy ၃ မျိုး အဆင့်ဆင့် ထပ်စမ်းမယ်. တစ်ခုမှ အောင်ရင် ရပ်မယ်.
-        // Direct sources are attempted twice before any proxy — proxies add
-        // their own caching and delay on top of the origin's.
+        // Both direct routes failed: walk the proxy chain as before, so
+        // phones whose network blocks the Thai sites still get numbers.
         val attempts = listOf(
-            setOrThUrl to ::parseSetOrTh,
-            settradeUrl to ::parseSettrade,
             setOrThUrl to ::parseSetOrTh,
             settradeUrl to ::parseSettrade,
             PROXY_ALLORIGINS + encodedSetOrTh to ::parseSetOrTh,
@@ -60,6 +86,53 @@ object SettradeRepository {
         firstFailure ?: FetchResult.Failure("All sources failed")
     }
 
+    private data class StampedResult(val data: LiveMarketData, val fresh: Boolean)
+
+    /**
+     * Direct set.or.th fetch with the desktop UA. A bot-wall shell (or any
+     * unparseable response) gets ONE quick retry after a short pause - in
+     * the logger runs a retry landed the full ~447 KB page almost every
+     * time. Returns null when both attempts fail.
+     */
+    private fun fetchSetOrThDirect(url: String): StampedResult? {
+        repeat(2) { attempt ->
+            try {
+                val (code, html) = fetchHtml(url, WIN_UA)
+                if (code in 200..299 && !html.isNullOrBlank() && html.length >= 5000) {
+                    val data = parseSetOrTh(html)
+                    if (data != null) return StampedResult(data, isFreshPrint(html))
+                }
+            } catch (e: Exception) {
+                // fall through to the retry / caller fallback
+            }
+            if (attempt == 0) {
+                try { Thread.sleep(1200) } catch (ignored: InterruptedException) {}
+            }
+        }
+        return null
+    }
+
+    /**
+     * The set.or.th page prints its own "Last Update" (Bangkok time). A
+     * print counts as fresh when that stamp is within 2 minutes of network
+     * time; during live hours the prints change constantly, so an older
+     * stamp means a stale cached page. Unknown stamp = treat as fresh
+     * (set.or.th is the leading source whenever it answers at all).
+     */
+    private fun isFreshPrint(html: String): Boolean {
+        val m = Regex("""Last Update\s*([0-9]{1,2} [A-Za-z]{3} [0-9]{4} [0-9:]{8})""").find(html)
+            ?: return true
+        return try {
+            val fmt = SimpleDateFormat("d MMM yyyy HH:mm:ss", Locale.ENGLISH).apply {
+                timeZone = TimeZone.getTimeZone("Asia/Bangkok")
+            }
+            val stampMs = fmt.parse(m.groupValues[1])?.time ?: return true
+            (NetworkTime.now().timeInMillis - stampMs) / 1000 <= 120
+        } catch (e: Exception) {
+            true
+        }
+    }
+
     private inline fun tryFetch(url: String, parse: (String) -> LiveMarketData?): FetchResult {
         return try {
             val (code, html) = fetchHtml(url)
@@ -77,17 +150,14 @@ object SettradeRepository {
         }
     }
 
-    private fun fetchHtml(urlString: String): Pair<Int, String?> {
+    private fun fetchHtml(urlString: String, ua: String = MOBILE_UA): Pair<Int, String?> {
         val connection = URL(urlString).openConnection() as HttpURLConnection
         return try {
             connection.connectTimeout = 8000
             connection.readTimeout = 8000
             connection.requestMethod = "GET"
             connection.instanceFollowRedirects = true
-            connection.setRequestProperty(
-                "User-Agent",
-                "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Mobile Safari/537.36"
-            )
+            connection.setRequestProperty("User-Agent", ua)
             connection.setRequestProperty("Accept", "text/html,application/xhtml+xml")
             connection.setRequestProperty("Accept-Language", "th-TH,th;q=0.9,en;q=0.8")
             connection.setRequestProperty("Cache-Control", "no-cache, no-store, max-age=0")

@@ -304,9 +304,11 @@ class TwoDForegroundService : Service() {
         const val ACTION_STOP = "com.example.myanmar2d.ACTION_STOP"
 
         // How often the service re-scrapes the live SET index while running
-        // in the background. Kept longer than the in-app 4s ticker on
+        // in the background. Kept longer than the in-app 2s ticker on
         // purpose, to avoid hammering the source site continuously all day.
-        const val POLL_INTERVAL_MS = 20_000L
+        // (20s -> 10s in v1.3.8, with the dual-source fetch: Po could see the
+        // background number trailing other apps while values were moving.)
+        const val POLL_INTERVAL_MS = 10_000L
 
         // How long after an opening (9:30 / 2:00) the service keeps trying to
         // catch the first new-session numbers, and how long after a closing
