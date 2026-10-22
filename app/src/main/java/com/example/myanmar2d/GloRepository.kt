@@ -13,16 +13,25 @@ import java.util.Calendar
 import java.util.Locale
 
 /**
- * Fetches the official Thai Government Lottery (GLO) result via glo.or.th's public
- * checking API, and freezes it locally until the next draw (GLO draws on the 1st and
- * 16th of every month). Uses the phone's own local clock for period calculation -
- * no timezone conversion.
+ * Fetches the Thai Government Lottery (GLO) result and freezes it locally until the
+ * next draw (GLO draws on the 1st and 16th of every month). Uses the phone's own
+ * local clock for period calculation - no timezone conversion.
  *
- *   POST https://www.glo.or.th/api/checking/getLotteryResult
- *   Body: {"date":"DD","month":"MM","year":"YYYY"}
+ * Source order (v1.3.7 - Po's "fast link" fix, 2026-10-22): the official GLO
+ * checking API only publishes the first prize up to ~2 HOURS after the live
+ * broadcast ends, which is why the 3D number used to appear so late. The fast
+ * Thai news portals post it within minutes, so fetchAndFreeze now tries:
+ *   1. Sanook  GET https://news.sanook.com/lotto/check/DDMMYYYY/ (Buddhist year)
+ *   2. Kapook  GET https://lottery.kapook.com/check (latest draw; date-validated)
+ *   3. GLO     POST https://www.glo.or.th/api/checking/getLotteryResult
+ *              Body: {"date":"DD","month":"MM","year":"YYYY"}
+ * GLO stays as the official confirmation: when a fast-sourced result is cached
+ * without a last-2 yet, a later call retries GLO once to complete the record.
+ * Fast sources supply the FIRST PRIZE only (the 3D headline) - verified live
+ * against the 2026-10-16 draw (first prize 011781 on both portals).
  *
- * The raw response is logged (Log.d, tag "GloRepository") on every fetch attempt so the
- * exact JSON shape can be inspected in Logcat and the parsing adjusted if needed.
+ * The raw GLO response is logged (Log.d, tag "GloRepository") on every fetch
+ * attempt so the exact JSON shape can be inspected in Logcat.
  */
 object GloRepository {
 
@@ -171,13 +180,32 @@ object GloRepository {
         val periodKey = keyFmt.format(periodCal.time)
 
         val cached = readCached(context)
-        if (cached != null && cached.drawDateKey == periodKey) {
+        if (cached != null && cached.drawDateKey == periodKey && cached.last2 != null) {
             return@withContext FetchResult.Success(cached)
         }
 
         val day = "%02d".format(periodCal.get(Calendar.DAY_OF_MONTH))
         val month = "%02d".format(periodCal.get(Calendar.MONTH) + 1)
         val year = "%04d".format(periodCal.get(Calendar.YEAR))
+
+        // Fast sources first (Sanook -> Kapook): they publish the first prize
+        // within minutes of the broadcast, while the official GLO API below
+        // can lag ~2 hours. Skipped when this period is already cached (that
+        // path falls through to GLO to fill in the missing last-2).
+        if (cached?.drawDateKey != periodKey) {
+            val fast = fetchFastFirstPrize(day, month, year)
+            if (fast != null) {
+                val fresh = GloDrawResult(
+                    drawDateKey = periodKey,
+                    displayDate = "$day/$month/$year",
+                    firstPrize = fast,
+                    last3 = fast.takeLast(3),
+                    last2 = null
+                )
+                saveCache(context, fresh)
+                return@withContext FetchResult.Success(fresh)
+            }
+        }
 
         try {
             val conn = (URL(ENDPOINT).openConnection() as HttpURLConnection).apply {
@@ -233,6 +261,66 @@ object GloRepository {
             cached?.let { FetchResult.Success(it) }
                 ?: FetchResult.Failure(e.message ?: "Unknown error")
         }
+    }
+
+    // ------------------------------------------------------------------
+    // Fast sources (v1.3.7). Both verified live on 2026-10-22 against the
+    // 2026-10-16 draw: first prize 011781 on Sanook and on Kapook.
+    // ------------------------------------------------------------------
+
+    private const val FAST_UA =
+        "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36"
+
+    private val THAI_MONTHS = arrayOf(
+        "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
+        "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"
+    )
+
+    private fun httpGetText(url: String): String? = try {
+        val conn = (URL(url).openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            setRequestProperty("User-Agent", FAST_UA)
+            connectTimeout = 10_000
+            readTimeout = 10_000
+        }
+        if (conn.responseCode in 200..299) {
+            conn.inputStream.bufferedReader().use { it.readText() }
+        } else null
+    } catch (e: Exception) {
+        null
+    }
+
+    /** First prize (6 digits) from the fast portals, or null if neither has it yet. */
+    private fun fetchFastFirstPrize(day: String, month: String, yearCE: String): String? {
+        fetchFromSanook(day, month, yearCE)?.let { return it }
+        return fetchFromKapook(day, month, yearCE)
+    }
+
+    private fun fetchFromSanook(day: String, month: String, yearCE: String): String? {
+        val beYear = (yearCE.toIntOrNull() ?: return null) + 543
+        val html = httpGetText("https://news.sanook.com/lotto/check/$day$month$beYear/") ?: return null
+        Regex("""lotto__number--first[^>]*>\s*(\d{6})""").find(html)?.let {
+            return it.groupValues[1]
+        }
+        // Fallback: the JSON-LD articleBody carries the results as plain text
+        // ("รางวัลที่ 1 ... <6 digits>") even when the styled markup differs.
+        val labelIdx = html.indexOf("รางวัลที่ 1")
+        if (labelIdx < 0) return null
+        val slice = html.substring(labelIdx, minOf(html.length, labelIdx + 200))
+        return Regex("""\d{6}""").find(slice)?.value
+    }
+
+    private fun fetchFromKapook(day: String, month: String, yearCE: String): String? {
+        val beYear = (yearCE.toIntOrNull() ?: return null) + 543
+        val monthIdx = (month.toIntOrNull() ?: return null) - 1
+        if (monthIdx !in THAI_MONTHS.indices) return null
+        val html = httpGetText("https://lottery.kapook.com/check") ?: return null
+        // /check always shows the LATEST draw - trust it only when the page's
+        // own printed draw date is THIS draw, else we'd freeze the old result.
+        val expected = "วันที่ ${day.toInt()} ${THAI_MONTHS[monthIdx]} $beYear"
+        if (!html.contains(expected)) return null
+        return Regex("""<h4>รางวัลที่ 1</h4>\s*<strong>(\d{6})</strong>""")
+            .find(html)?.groupValues?.get(1)
     }
 
     /**

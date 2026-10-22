@@ -521,15 +521,15 @@ private const val CAPTURE_GRACE_SECONDS = 1800
 private fun secondsSinceMidnight(h: Int, m: Int, s: Int) = h * 3600 + m * 60 + s
 
 /**
- * A gentle, continuous alpha pulse (not tied to the 4-second data refresh) used to signal
- * "still watching, live" on values that haven't changed - without any jarring jump/flash
- * when the underlying number is actually the same.
+ * The big number's blink, MEASURED frame-by-frame from Po's kalock screen
+ * recording (2026-10-21, 10 fps green-pixel analysis of the big-number
+ * region): a 3.0-second cycle - fully ON for ~2.5 s, fully GONE for
+ * ~0.5 s - with INSTANT transitions (adjacent frames flip 1 -> 0 -> 1,
+ * no fade at all). The 1 ms ramps below render as hard cuts at any
+ * real frame rate. This replaces the v1.3.5-era 6.7 s fade keyframes,
+ * whose slow breathing is what Po called "like a heartbeat".
  */
 @Composable
-// Po's spec (from the kalock video, confirmed 2026-10-20): the big number
-// HARD-blinks - fully VANISHES and reappears - about every 6-7 seconds,
-// independent of value changes or refreshes. Mostly solid (~5.7s), gone
-// for under a second. On/off, NOT a fade/breathing effect.
 private fun rememberPulseAlpha(): Float {
     val infiniteTransition = rememberInfiniteTransition(label = "livePulse")
     val alpha by infiniteTransition.animateFloat(
@@ -537,12 +537,12 @@ private fun rememberPulseAlpha(): Float {
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
             animation = keyframes {
-                durationMillis = 6700
+                durationMillis = 3000
                 1f at 0
-                1f at 5700
-                0f at 5950
-                0f at 6450
-                1f at 6700
+                1f at 2499
+                0f at 2500
+                0f at 2999
+                1f at 3000
             },
             repeatMode = RepeatMode.Restart
         ),
@@ -747,7 +747,11 @@ private fun HomeScreen(
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Confirmed 12:01 PM \u2022 ${slot1!!.date} ${slot1!!.capturedAt}",
+                    // Po's display rule (2026-10-21): show the OFFICIAL slot
+                    // minute like kalock does, not the internal capture
+                    // second (the +5 s capture itself is deliberate and
+                    // stays - only this label changes).
+                    "Confirmed 12:01 PM \u2022 ${slot1!!.date} 12:01",
                     fontSize = 14.sp,
                     color = Color.DarkGray
                 )
@@ -767,7 +771,7 @@ private fun HomeScreen(
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Confirmed 4:30 PM \u2022 ${slot2!!.date} ${slot2!!.capturedAt}",
+                    "Confirmed 4:30 PM \u2022 ${slot2!!.date} 16:30",
                     fontSize = 14.sp,
                     color = Color.DarkGray
                 )
